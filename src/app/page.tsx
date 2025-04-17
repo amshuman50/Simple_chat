@@ -1,97 +1,6 @@
-// 'use client';
-
-// import { useEffect, useState, FormEvent } from 'react';
-// import io, { Socket } from 'socket.io-client';
-
-// type ChatMessage = {
-//   user: string;
-//   message: string;
-// };
-
-// let socket: Socket;
-
-// export default function Home() {
-//   const [username, setUsername] = useState('');
-//   const [message, setMessage] = useState('');
-//   const [chat, setChat] = useState<ChatMessage[]>([]);
-//   const [joined, setJoined] = useState(false);
-
-//   useEffect(() => {
-//     fetch('/api/socket');
-//     socket = io();
-
-//     socket.on('message', (data: ChatMessage) => {
-//       setChat((prev) => [...prev, data]);
-//     });
-
-//     return () => {
-//       socket.disconnect();
-//     };
-//   }, []);
-
-//   const handleJoin = (e: FormEvent) => {
-//     e.preventDefault();
-//     if (username.trim()) {
-//       setJoined(true);
-//     }
-//   };
-
-//   const sendMessage = (e: FormEvent) => {
-//     e.preventDefault();
-//     if (!message.trim()) return;
-
-//     const data: ChatMessage = { user: username, message };
-//     socket.emit('message', data);
-//     setChat((prev) => [...prev, data]);
-//     setMessage('');
-//   };
-
-//   return (
-//     <div className="p-6 max-w-xl mx-auto">
-//       {!joined ? (
-//         <form onSubmit={handleJoin} className="flex flex-col gap-2">
-//           <h1 className="text-xl font-bold">Enter your name to chat</h1>
-//           <input
-//             className="border p-2"
-//             placeholder="Your name"
-//             value={username}
-//             onChange={(e) => setUsername(e.target.value)}
-//           />
-//           <button className="bg-blue-500 text-white p-2 rounded" type="submit">
-//             Join
-//           </button>
-//         </form>
-//       ) : (
-//         <>
-//           <h1 className="text-xl font-bold mb-2">Chatting as {username}</h1>
-//           <div className="border p-4 h-64 overflow-y-auto mb-4 bg-gray-50 rounded">
-//             {chat.map((msg, i) => (
-//               <div key={i}>
-//                 <strong>{msg.user}:</strong> {msg.message}
-//               </div>
-//             ))}
-//           </div>
-//           <form onSubmit={sendMessage} className="flex gap-2">
-//             <input
-//               className="border p-2 flex-1"
-//               value={message}
-//               onChange={(e) => setMessage(e.target.value)}
-//               placeholder="Type a message"
-//             />
-//             <button type="submit" className="bg-blue-500 text-white px-4 py-2 rounded">
-//               Send
-//             </button>
-//           </form>
-//         </>
-//       )}
-//     </div>
-//   );
-// }
-
-
 'use client';
 
-import { useEffect, useState, FormEvent } from 'react';
+import { useEffect, useState, useRef, FormEvent } from 'react';
 import io, { Socket } from 'socket.io-client';
 
 type ChatMessage = {
@@ -99,24 +8,33 @@ type ChatMessage = {
   message: string;
 };
 
-let socket: Socket;
-
 export default function Home() {
   const [username, setUsername] = useState('');
   const [message, setMessage] = useState('');
   const [chat, setChat] = useState<ChatMessage[]>([]);
   const [joined, setJoined] = useState(false);
+  const [typingUser, setTypingUser] = useState<string | null>(null);
+  const typingTimeout = useRef<NodeJS.Timeout | null>(null);
+  const socket = useRef<Socket | null>(null);
 
   useEffect(() => {
     fetch('/api/socket');
-    socket = io();
+    socket.current = io();
 
-    socket.on('message', (data: ChatMessage) => {
+    socket.current.on('message', (data: ChatMessage) => {
       setChat((prev) => [...prev, data]);
     });
 
+    socket.current.on('typing', (name: string) => {
+      setTypingUser(name);
+      if (typingTimeout.current) clearTimeout(typingTimeout.current);
+      typingTimeout.current = setTimeout(() => {
+        setTypingUser(null);
+      }, 2000); // Hide after 2s
+    });
+
     return () => {
-      socket.disconnect();
+      socket.current?.disconnect();
     };
   }, []);
 
@@ -132,9 +50,16 @@ export default function Home() {
     if (!message.trim()) return;
 
     const data: ChatMessage = { user: username, message };
-    socket.emit('message', data);
+    socket.current?.emit('message', data);
     setChat((prev) => [...prev, data]);
     setMessage('');
+  };
+
+  const handleTyping = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setMessage(e.target.value);
+    if (socket.current && username.trim()) {
+      socket.current.emit('typing', username);  // Emit typing only if username is valid
+    }
   };
 
   return (
@@ -170,11 +95,10 @@ export default function Home() {
                     className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}
                   >
                     <div
-                      className={`px-4 py-2 rounded-lg max-w-[70%] ${
-                        isMe
-                          ? 'bg-blue-500 text-white rounded-br-none'
-                          : 'bg-gray-200 text-gray-800 rounded-bl-none'
-                      }`}
+                      className={`px-4 py-2 rounded-lg max-w-[70%] ${isMe
+                        ? 'bg-blue-500 text-white rounded-br-none'
+                        : 'bg-gray-200 text-gray-800 rounded-bl-none'
+                        }`}
                     >
                       {!isMe && <div className="text-xs text-gray-500 mb-1">{msg.user}</div>}
                       {msg.message}
@@ -183,11 +107,16 @@ export default function Home() {
                 );
               })}
             </div>
+            {typingUser && typingUser !== username && (
+              <div className="text-sm text-gray-500 italic mb-2">
+                {typingUser} is typing...
+              </div>
+            )}
             <form onSubmit={sendMessage} className="flex gap-2">
               <input
                 className="border p-2 flex-1 rounded"
                 value={message}
-                onChange={(e) => setMessage(e.target.value)}
+                onChange={handleTyping}  // Use the updated typing handler
                 placeholder="Type your message..."
               />
               <button

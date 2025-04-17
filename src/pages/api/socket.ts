@@ -25,6 +25,10 @@ export default function handler(req: NextApiRequest, res: NextApiResponseWithSoc
       socket.on('message', (data: ChatMessage) => {
         socket.broadcast.emit('message', data); // send to others
       });
+      socket.on('typing', (username: string) => {
+        socket.broadcast.emit('typing', username); // send to all except sender
+      });
+      
     });
   }
 
