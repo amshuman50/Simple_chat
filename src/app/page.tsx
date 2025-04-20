@@ -67,7 +67,7 @@ export default function Home() {
       <div className="w-full max-w-md bg-white rounded-lg shadow-md p-6">
         {!joined ? (
           <form onSubmit={handleJoin} className="flex flex-col gap-4">
-            <h1 className="text-2xl font-bold text-center">Join the Chat</h1>
+            <h1 className="text-2xl font-bold text-center text-black">Join the Chat</h1>
             <input
               className="border p-2 rounded"
               placeholder="Enter your name"
